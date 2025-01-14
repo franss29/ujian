@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, Edit, Save, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 
 interface Todo {
   id: number
-  text: string
+  task: string // Ganti `text` menjadi `task` sesuai dengan API response
   completed: boolean
 }
 
@@ -19,37 +19,89 @@ export default function TodoList() {
   const [editId, setEditId] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
 
-  const addTodo = () => {
+  // Fetch tasks from the database
+  const fetchTodos = async () => {
+    const response = await fetch('http://localhost/pweb_ujian_api/tasks.php', {
+      method: 'GET',
+    })
+    const data = await response.json()
+    setTodos(data)  // Set tasks to the latest list from the API
+  }
+
+  useEffect(() => {
+    fetchTodos()
+  }, [])
+
+  // Add new task to the database
+  const addTodo = async () => {
     if (input.trim()) {
-      setTodos([...todos, { id: Date.now(), text: input.trim(), completed: false }])
-      setInput('')
+      const response = await fetch('http://localhost/pweb_ujian_api/tasks.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `task=${input.trim()}`,
+      })
+      const data = await response.json()
+      fetchTodos() // Refresh the tasks list
+      setInput('') // Clear input
     }
   }
 
-  const toggleTodo = (id: number) => {
-    setTodos(todos.map(todo =>
-      todo.id === id ? { ...todo, completed: !todo.completed } : todo
-    ))
+  // Toggle task completion status
+  const toggleTodo = async (id: number, completed: boolean) => {
+    const response = await fetch('http://localhost/pweb_ujian_api/tasks.php', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id, completed: !completed }),
+    })
+    const result = await response.json()
+    if (result.message) {
+      fetchTodos() // Refresh the tasks
+    }
   }
 
-  const deleteTodo = (id: number) => {
-    setTodos(todos.filter(todo => todo.id !== id))
+  // Delete a task from the database
+  const deleteTodo = async (id: number) => {
+    const response = await fetch('http://localhost/pweb_ujian_api/tasks.php', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id }),
+    })
+    const result = await response.json()
+    if (result.message) {
+      fetchTodos() // Refresh the tasks
+    }
   }
 
   const startEdit = (todo: Todo) => {
     setEditId(todo.id)
-    setEditText(todo.text)
+    setEditText(todo.task) // Use correct property `task`
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editText.trim() && editId) {
-      setTodos(todos.map(todo =>
-        todo.id === editId ? { ...todo, text: editText.trim() } : todo
-      ))
-      setEditId(null)
-      setEditText('')
+      const response = await fetch('http://localhost/pweb_ujian_api/tasks.php', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: editId, task: editText.trim() }), // Kirim teks tugas ke API
+      });
+      const result = await response.json();
+      if (result.message) {
+        setEditId(null);
+        setEditText('');
+        fetchTodos(); // Refresh daftar tugas setelah berhasil disimpan
+      } else {
+        console.error(result.error); // Log error jika API gagal
+      }
     }
-  }
+  }  
 
   const cancelEdit = () => {
     setEditId(null)
@@ -66,7 +118,7 @@ export default function TodoList() {
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && addTodo()}
             placeholder="Add a new task..."
-            className="flex-grow"
+            className="flex-grow bg-white text-black border-gray-300 focus:ring-emerald-500 focus:border-emerald-500"
           />
           <Button onClick={addTodo} className="bg-emerald-500 hover:bg-emerald-600">
             <Plus className="h-5 w-5" />
@@ -81,7 +133,7 @@ export default function TodoList() {
             >
               <Checkbox
                 checked={todo.completed}
-                onCheckedChange={() => toggleTodo(todo.id)}
+                onCheckedChange={() => toggleTodo(todo.id, todo.completed)}
               />
               
               {editId === todo.id ? (
@@ -90,7 +142,7 @@ export default function TodoList() {
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
-                    className="flex-grow"
+                    className="flex-grow bg-white text-black border-gray-300 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                   <Button onClick={saveEdit} size="sm" variant="outline" className="text-emerald-600">
                     <Save className="h-4 w-4" />
@@ -102,7 +154,7 @@ export default function TodoList() {
               ) : (
                 <>
                   <span className={`flex-grow ${todo.completed ? 'line-through text-gray-400' : ''}`}>
-                    {todo.text}
+                    {todo.task} {/* Ensure to use correct property */}
                   </span>
                   <div className="flex gap-2">
                     <Button
@@ -137,4 +189,3 @@ export default function TodoList() {
     </Card>
   )
 }
-
